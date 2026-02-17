@@ -2,10 +2,7 @@ name: Deploy React Frontend to EC2
 
 on:
   push:
-    branches: [ "main" ]
-    paths:
-      - "frontend/**"
-      - ".github/workflows/deploy-frontend.yml"
+    branches: ["main"]
 
 jobs:
   build-and-deploy:
@@ -21,11 +18,9 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        working-directory: frontend
         run: npm install
 
       - name: Build
-        working-directory: frontend
         run: npm run build
         env:
           VITE_API_BASE_URL: https://api.instifly.dpdns.org/api
@@ -36,9 +31,9 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: "frontend/dist/*"
+          source: "dist/*"
           target: "/home/ubuntu/instifly-frontend-dist"
-          strip_components: 2
+          strip_components: 1
 
       - name: Deploy frontend on EC2
         uses: appleboy/ssh-action@v1.0.3
