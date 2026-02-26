@@ -1,4 +1,4 @@
-const MAX_PARALLEL_UPLOADS = 2;
+const MAX_PARALLEL_UPLOADS = 5;
 
 let queue = [];
 let activeUploads = 0;

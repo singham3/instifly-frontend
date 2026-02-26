@@ -8,7 +8,7 @@ import {
 import { cancelUpload } from "../utils/uploadMultipart";
 
 export default function Upload() {
-  const { mutate, isPending } = useMultipartUpload();
+  const { mutateAsync, isPending } = useMultipartUpload();
 
   const [file, setFile] = useState(null);
   const [resumeData, setResumeData] = useState(null);
@@ -53,81 +53,65 @@ export default function Upload() {
 
   // 📁 File selection
   const handleFileChange = (e) => {
-    const selectedFile = e.target.files[0];
-    if (!selectedFile) return;
+    const files = Array.from(e.target.files);
 
-    const allowedExtensions = [".mp4", ".mkv"];
-    const fileName = selectedFile.name.toLowerCase();
+    files.forEach((selectedFile) => {
+      const allowedExtensions = [".mp4", ".mkv"];
+      const fileName = selectedFile.name.toLowerCase();
 
-    if (!allowedExtensions.some((ext) => fileName.endsWith(ext))) {
-      alert("Invalid file type");
-      return;
-    }
+      if (!allowedExtensions.some((ext) => fileName.endsWith(ext))) {
+        alert(`Invalid file: ${selectedFile.name}`);
+        return;
+      }
 
-    if (selectedFile.size > 500 * 1024 * 1024) {
-      alert("File too large (max 500MB)");
-      return;
-    }
+      if (selectedFile.size > 500 * 1024 * 1024) {
+        alert(`File too large: ${selectedFile.name}`);
+        return;
+      }
 
-    setFile(selectedFile);
+      const saved = getUploadState(selectedFile.name);
+
+      mutateAsync({
+        file: selectedFile,
+        uploadId: saved?.upload_id,
+        isResume: !!saved,
+        key: saved?.key,
+      });
+    });
   };
 
+
   // 🚀 Upload / Resume
-  const handleUpload = () => {
+  const handleUpload = async () => {
     if (!file) return;
 
     const saved = getUploadState(file.name);
 
-    // 🔁 Resume upload
-    if (saved) {
-      mutate(
-        {
+    const payload = saved
+      ? {
           file,
           uploadId: saved.upload_id,
-          key: saved.key,
           isResume: true,
-        },
-        {
-          onSuccess: (url) => {
-            console.log("Uploaded:", url);
-            alert("Upload completed!");
-            clearUploadState(file.name);
-            setResumeData(null);
-          },
-          onError: (err) => {
-            console.error(err);
-
-            if (err.name === "AbortError") {
-              alert("Upload cancelled");
-            } else if (err.message?.includes("part")) {
-              alert("Upload failed at chunk. Will retry...");
-            } else {
-              alert(`Upload failed: ${err.message}`);
-            }
-          },
+          key: saved.key,
         }
-      );
-    }
-    // 🆕 Fresh upload
-    else {
-      mutate(
-        {
+      : {
           file,
           isResume: false,
-        },
-        {
-          onSuccess: (url) => {
-            console.log("Uploaded:", url);
-            alert("Upload completed!");
-          },
-          onError: (err) => {
-            console.error(err);
-            alert(`Upload failed: ${err.message}`);
-          },
-        }
-      );
-    }
-  }
+        };
+
+    // 🚀 DO NOT await (important)
+    mutateAsync(payload)
+      .then((url) => {
+        console.log("Uploaded:", url);
+      })
+      .catch((err) => {
+        console.error(err);
+      });
+
+    // ✅ clear input so user can select next file
+    setFile(null);
+  };
+
 
 
   return (
@@ -196,6 +180,7 @@ export default function Upload() {
               name="file" 
               type="file" 
               className="hidden" 
+              multiple={true}
               onChange={handleFileChange} 
               accept=".mp4,.mkv" 
             />
@@ -210,7 +195,7 @@ export default function Upload() {
         </button>
         <button
           onClick={handleUpload}
-          disabled={!file || isPending}
+          disabled={!file}
           className="mt-4 ms-4 bg-blue-600 text-white px-4 py-2 rounded"
         >
           {isPending ? "Uploading..." : "Upload"}
