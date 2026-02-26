@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import {
   getAllUploads,
   getUploadState,
-  clearUploadState,
 } from "../utils/uploadStorage";
 import { cancelUpload } from "../utils/uploadMultipart";
 
