@@ -1,5 +1,11 @@
 import api from "../api/axiosClient";
 
+export async function listUploadedParts(data) {
+  const res = await api.post("/upload/list-parts/", data);
+  return res.data;
+}
+
+
 // Step 1: get presigned URL
 export async function getUploadUrl(file) {
   console.log("while fetching uploading URL then the file type is: ", file.name, file.type);
@@ -28,10 +34,8 @@ export async function saveFileMetadata(data) {
   return res.data;
 }
 
-export async function initiateUpload(file) {
-  const res = await api.post("/upload/init/", {
-    file_name: file.name,
-  });
+export async function initiateUpload(payload) {
+  const res = await api.post("/upload/init/", payload);
   return res.data;
 }
 
@@ -39,7 +43,10 @@ export async function getPartUploadUrl(data) {
   const res = await api.post("/upload/part-url/", data);
   return res.data;
 }
-
+export async function getMultiplePartUploadUrl(data) {
+  const res = await api.post("/upload/multiple-part-urls/", data);
+  return res.data;
+}
 export async function completeUpload(data) {
   const res = await api.post("/upload/complete/", data);
   return res.data;

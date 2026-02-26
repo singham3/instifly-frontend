@@ -3,25 +3,50 @@ import {
   initiateUpload,
   completeUpload,
 } from "../services/uploadService";
-import { uploadFileMultipart } from "../utils/uploadMultipart";
+import { uploadFileMultipart, getFileHash } from "../utils/uploadMultipart";
+import { addToQueue } from "../utils/uploadQueue";
 
 export function useMultipartUpload() {
   return useMutation({
-    mutationFn: async (file) => {
-      // 1. INIT
-      const { upload_id } = await initiateUpload(file);
+    mutationFn: async ({ file, uploadId, isResume, key }) => {
+      return new Promise((resolve, reject) => {
 
-      // 2. UPLOAD PARTS
-      const parts = await uploadFileMultipart(file, upload_id);
+        addToQueue(async () => {
+          try {
+            const fileHash = await getFileHash(file);
 
-      // 3. COMPLETE
-      const res = await completeUpload({
-        file_name: file.name,
-        upload_id,
-        parts,
+            let finalUploadId = uploadId;
+            let finalKey = key;
+
+            if (!isResume) {
+              const res = await initiateUpload({
+                file_name: file.name,
+                content_type: file.type,
+                file_size: file.size,
+                file_hash: fileHash,
+              });
+
+              finalUploadId = res.upload_id;
+              finalKey = res.key;
+            }
+
+            const parts = await uploadFileMultipart(file, finalUploadId, finalKey);
+
+            const res = await completeUpload({
+              key: finalKey,
+              upload_id: finalUploadId,
+              parts,
+            });
+
+            resolve(res.file_url);
+
+          } catch (err) {
+            reject(err);
+          }
+        });
+
       });
+    }
 
-      return res.file_url;
-    },
   });
 }
