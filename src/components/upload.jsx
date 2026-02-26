@@ -11,8 +11,27 @@ export default function Upload() {
 
   const [file, setFile] = useState(null);
   const [resumeData, setResumeData] = useState(null);
-
+  const [uploads, setUploads] = useState([]);
+  const [queueCount, setQueueCount] = useState(0);
   // 🔍 Detect incomplete uploads (on load + live updates)
+  useEffect(() => {
+    const onQueued = () => {
+      setQueueCount((prev) => prev + 1);
+    };
+
+    const onStarted = () => {
+      setQueueCount((prev) => Math.max(prev - 1, 0));
+    };
+
+    window.addEventListener("upload-queued", onQueued);
+    window.addEventListener("upload-started", onStarted);
+
+    return () => {
+      window.removeEventListener("upload-queued", onQueued);
+      window.removeEventListener("upload-started", onStarted);
+    };
+  }, []);
+
   useEffect(() => {
     const loadUploads = () => {
       const uploads = getAllUploads();
@@ -34,12 +53,24 @@ export default function Upload() {
 
       const saved = getUploadState(fileName);
 
-      setResumeData({
-        fileName,
-        upload_id: saved?.upload_id,
-        key: saved?.key,
-        uploadedCount,
-        totalParts,
+      setUploads((prev) => {
+        const existing = prev.find((u) => u.fileName === fileName);
+
+        const newData = {
+          fileName,
+          upload_id: saved?.upload_id,
+          key: saved?.key,
+          uploadedCount,
+          totalParts,
+        };
+
+        if (existing) {
+          return prev.map((u) =>
+            u.fileName === fileName ? newData : u
+          );
+        }
+
+        return [...prev, newData];
       });
     };
 
@@ -52,32 +83,12 @@ export default function Upload() {
 
   // 📁 File selection
   const handleFileChange = (e) => {
-    const files = Array.from(e.target.files);
+    const selectedFile = e.target.files[0];
+    if (!selectedFile) return;
 
-    files.forEach((selectedFile) => {
-      const allowedExtensions = [".mp4", ".mkv"];
-      const fileName = selectedFile.name.toLowerCase();
-
-      if (!allowedExtensions.some((ext) => fileName.endsWith(ext))) {
-        alert(`Invalid file: ${selectedFile.name}`);
-        return;
-      }
-
-      if (selectedFile.size > 500 * 1024 * 1024) {
-        alert(`File too large: ${selectedFile.name}`);
-        return;
-      }
-
-      const saved = getUploadState(selectedFile.name);
-
-      mutateAsync({
-        file: selectedFile,
-        uploadId: saved?.upload_id,
-        isResume: !!saved,
-        key: saved?.key,
-      });
-    });
+    setFile(selectedFile);
   };
+
 
 
   // 🚀 Upload / Resume
@@ -86,39 +97,45 @@ export default function Upload() {
 
     const saved = getUploadState(file.name);
 
-    const payload = saved
-      ? {
-          file,
-          uploadId: saved.upload_id,
-          isResume: true,
-          key: saved.key,
-        }
-      : {
-          file,
-          isResume: false,
-        };
+    const payload = saved ? {file, uploadId: saved.upload_id, isResume: true, key: saved.key} : {file, isResume: false};
 
-    // 🚀 DO NOT await (important)
-    mutateAsync(payload)
-      .then((url) => {
-        console.log("Uploaded:", url);
-      })
-      .catch((err) => {
-        console.error(err);
-      });
+    mutateAsync(payload); // no await → background upload
 
-    // ✅ clear input so user can select next file
-    setFile(null);
+    setFile(null); // allow next file
   };
-
-
-
+  console.log("Current uploads in progress:", isPending);
   return (
     <div className="flex justify-center items-center min-h-screen bg-gray-100 px-8">
       
 
       <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
         <h2 className="text-xl font-bold mb-4 text-gray-800">Upload Video</h2>
+        {uploads.length > 0 && (
+          <div className="mb-4">
+            <h3 className="text-sm font-semibold mb-2">
+              Uploading {uploads.length} file(s)
+            </h3>
+
+            {uploads.map((u) => {
+              const percent = Math.round(
+                (u.uploadedCount / u.totalParts) * 100
+              );
+
+              return (
+                <div key={u.fileName} className="mb-2">
+                  <p className="text-xs">{u.fileName}</p>
+                  <div className="w-full bg-gray-200 h-2 rounded">
+                    <div
+                      className="bg-blue-600 h-2 rounded"
+                      style={{ width: `${percent}%` }}
+                    />
+                  </div>
+                  <p className="text-xs">{percent}%</p>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Resume UI */}
         {resumeData && (
