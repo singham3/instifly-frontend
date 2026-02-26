@@ -52,6 +52,7 @@ export async function uploadFileMultipart(file, uploadId, key) {
             uploadedParts = res.parts || [];
             console.log("Resuming upload:", uploadedParts);
         } catch (err) {
+            console.log("Failed to fetch uploaded parts, resuming with local state", err);
             uploadedParts = saved.parts || [];
         }
     }
