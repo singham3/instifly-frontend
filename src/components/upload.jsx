@@ -34,7 +34,9 @@ export default function Upload() {
 
   useEffect(() => {
     fetchUploads();
+  }, [currentPage, fetchUploads]);
 
+  useEffect(() => {
     // 🔥 listen for live progress updates
     const handler = (e) => {
       const { fileName, uploadedCount, totalParts } = e.detail;
@@ -73,11 +75,7 @@ export default function Upload() {
       window.removeEventListener("upload-progress", handler);
       window.removeEventListener("upload-cancelled-all", cancelAllHandler);
     };
-  }, [fetchUploads]);
-
-  useEffect(() => {
-    fetchUploads();
-  }, [currentPage, fetchUploads]);
+  }, []);
 
   // 📁 File selection
   const handleFileChange = (e) => {
