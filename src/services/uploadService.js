@@ -51,3 +51,13 @@ export async function completeUpload(data) {
   const res = await api.post("/upload/complete/", data);
   return res.data;
 }
+
+export async function listUploads(page = 1) {
+  const res = await api.get(`/uploads/?page=${page}`);
+  return res.data;
+}
+
+export async function deleteUpload(id) {
+  const res = await api.delete(`/uploads/${id}/`);
+  return res.data;
+}

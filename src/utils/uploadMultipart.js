@@ -24,10 +24,26 @@ export function resumeUpload(fileName) {
 }
 
 export function cancelUpload(fileName) {
-  const controller = abortControllers.get(fileName);
-  if (controller) {
-    controller.abort();
-    window.dispatchEvent(new CustomEvent("upload-cancelled", { detail: { fileName } }));
+    console.log("Cancelling upload:", fileName);
+    console.log("Active controllers:", abortControllers.size);
+  if (fileName) {
+    const controller = abortControllers.get(fileName);
+    console.log("Abort controller found: ", controller);
+    if (controller) {
+      controller.abort();
+      clearUploadState(fileName);
+      window.dispatchEvent(new CustomEvent("upload-cancelled", { detail: { fileName } }));
+    }
+  } else {
+    // Cancel all uploads
+    abortControllers.forEach((controller, name) => {
+      controller.abort();
+      clearUploadState(name);
+    });
+    console.log("All uploads cancelled");
+    abortControllers.clear();
+    uploadStates.clear();
+    window.dispatchEvent(new CustomEvent("upload-cancelled-all"));
   }
 } 
 export async function getFileHash(file) {
@@ -68,6 +84,24 @@ export async function uploadFileMultipart(file, uploadId, key) {
 
     const parts = [...uploadedParts];
     const totalParts = Math.ceil(file.size / CHUNK_SIZE);
+
+    const remainingParts = [];
+    for (let i = 1; i <= totalParts; i++) {
+        if (!parts.find(p => p.PartNumber === i)) {
+            remainingParts.push(i);
+        }
+    }
+
+    const { urls } = await getMultiplePartUploadUrl({
+        key,
+        upload_id: uploadId,
+        part_numbers: remainingParts,
+    });
+
+    const urlMap = {};
+    urls.forEach(u => {
+        urlMap[u.part_number] = u.url;
+    });
 
     const uploadPart = async (partNumber) => {
         if (parts.find((p) => p.PartNumber === partNumber)) return;
@@ -118,13 +152,14 @@ export async function uploadFileMultipart(file, uploadId, key) {
         );
     };
 
-
     const concurrency = Math.min(navigator.hardwareConcurrency || 4, 6);
 
     let current = 1;
 
     async function worker() {
         while (current <= totalParts) {
+            if (abortController.signal.aborted) return;
+            
             const state = uploadStates.get(file.name);
             if (state?.isPaused) {
                 await new Promise(res => setTimeout(res, 500));
@@ -132,29 +167,24 @@ export async function uploadFileMultipart(file, uploadId, key) {
             }
 
             const partNumber = current++;
-            await uploadPart(partNumber);
+            try {
+                await uploadPart(partNumber);
+            } catch (err) {
+                if (err.name === 'AbortError') return;
+                throw err;
+            }
         }
     }
-    
-    const remainingParts = [];
-    for (let i = 1; i <= totalParts; i++) {
-        if (!parts.find(p => p.PartNumber === i)) {
-            remainingParts.push(i);
+
+    try {
+        await Promise.all(Array(concurrency).fill(0).map(worker));
+    } catch (err) {
+        if (err.name === 'AbortError') {
+            console.log('Upload cancelled:', file.name);
+            return [];
         }
+        throw err;
     }
-
-    const { urls } = await getMultiplePartUploadUrl({
-        key,
-        upload_id: uploadId,
-        part_numbers: remainingParts,
-    });
-
-    const urlMap = {};
-    urls.forEach(u => {
-        urlMap[u.part_number] = u.url;
-    });
-
-    await Promise.all(Array(concurrency).fill(0).map(worker));
 
     if (!abortController?.signal.aborted) {
         clearUploadState(file.name);

@@ -5,45 +5,17 @@ import {
   getUploadState,
 } from "../utils/uploadStorage";
 import { cancelUpload } from "../utils/uploadMultipart";
+import { listUploads, deleteUpload } from "../services/uploadService";
 
 export default function Upload() {
   const [files, setFiles] = useState([]);
-  const [resumeData, setResumeData] = useState(null);
   const [uploads, setUploads] = useState([]);
-  const [queueCount, setQueueCount] = useState(0);
-  // 🔍 Detect incomplete uploads (on load + live updates)
-  useEffect(() => {
-    const onQueued = () => {
-      setQueueCount((prev) => prev + 1);
-    };
-
-    const onStarted = () => {
-      setQueueCount((prev) => Math.max(prev - 1, 0));
-    };
-
-    window.addEventListener("upload-queued", onQueued);
-    window.addEventListener("upload-started", onStarted);
-
-    return () => {
-      window.removeEventListener("upload-queued", onQueued);
-      window.removeEventListener("upload-started", onStarted);
-    };
-  }, []);
+  const [completedFiles, setCompletedFiles] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
   useEffect(() => {
-    const loadUploads = () => {
-      const uploads = getAllUploads();
-
-      if (uploads.length > 0) {
-        const u = uploads[0];
-
-        if (u.uploadedCount < u.totalParts) {
-          setResumeData(u);
-        }
-      }
-    };
-
-    loadUploads();
+    fetchUploads();
 
     // 🔥 listen for live progress updates
     const handler = (e) => {
@@ -72,12 +44,43 @@ export default function Upload() {
       });
     };
 
+    const cancelAllHandler = () => {
+      setUploads([]);
+      setFiles([]);
+    };
+
     window.addEventListener("upload-progress", handler);
+    window.addEventListener("upload-cancelled-all", cancelAllHandler);
 
     return () => {
       window.removeEventListener("upload-progress", handler);
+      window.removeEventListener("upload-cancelled-all", cancelAllHandler);
     };
   }, []);
+
+  const fetchUploads = async () => {
+    try {
+      const data = await listUploads(currentPage);
+      setCompletedFiles(data.results);
+      setTotalPages(Math.ceil(data.count / 10));
+    } catch (err) {
+      console.error('Failed to fetch uploads:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchUploads();
+  }, [currentPage]);
+
+  const handleDelete = async (id) => {
+    if (!confirm('Delete this file?')) return;
+    try {
+      await deleteUpload(id);
+      fetchUploads();
+    } catch (err) {
+      console.error('Delete failed:', err);
+    }
+  };
 
   // 📁 File selection
   const handleFileChange = (e) => {
@@ -112,27 +115,14 @@ export default function Upload() {
 
 
 
-  // 🚀 Upload / Resume
-  const handleUpload = async () => {
-    if (files.length === 0) return;
 
-    files.forEach(file => {
-      const saved = getUploadState(file.name);
-      const payload = saved 
-        ? {file, uploadId: saved.upload_id, isResume: true, key: saved.key} 
-        : {file, isResume: false};
-      uploadFile(payload).catch(err => console.error('Upload failed:', err));
-    });
-
-    setFiles([]);
-  };
 
   return (
     <div className="min-h-screen bg-gray-50 p-8">
       {/* Google Drive Style New Button */}
       <div className="mb-8">
         <label htmlFor="file-upload" className="inline-flex items-center gap-3 bg-white hover:bg-gray-50 shadow-md hover:shadow-lg transition-all px-6 py-3 rounded-full cursor-pointer border border-gray-200">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-plus" viewBox="0 0 16 16">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-plus" viewBox="0 0 16 16">
             <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4"/>
           </svg>
           <span className="font-medium text-gray-700">New</span>
@@ -150,7 +140,62 @@ export default function Upload() {
       {/* Main Content Area */}
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="text-2xl font-semibold text-gray-800 mb-4">My Drive</h2>
-        <p className="text-gray-600">Select files using the "New" button above</p>
+        
+        {completedFiles.length === 0 ? (
+          <p className="text-gray-600">No files uploaded yet</p>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Size</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Uploaded</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {completedFiles.map((file) => (
+                    <tr key={file.id}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{file.file_name}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {(file.file_size / (1024 * 1024)).toFixed(2)} MB
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {new Date(file.created_at).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <a href={file.file_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 mr-4">View</a>
+                        <button onClick={() => handleDelete(file.id)} className="text-red-600 hover:text-red-800">Delete</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            
+            {totalPages > 1 && (
+              <div className="flex justify-center gap-2 mt-4">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-4 py-2 bg-gray-200 rounded disabled:opacity-50"
+                >
+                  Previous
+                </button>
+                <span className="px-4 py-2">Page {currentPage} of {totalPages}</span>
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="px-4 py-2 bg-gray-200 rounded disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       {/* Floating Upload Progress Card (Bottom Right) */}
@@ -162,7 +207,7 @@ export default function Upload() {
               Uploading {uploads.length} item{uploads.length > 1 ? 's' : ''}
             </h3>
             <button
-              onClick={cancelUpload}
+              onClick={() => cancelUpload()}
               className="text-gray-400 hover:text-gray-600 transition-colors"
               title="Cancel all"
             >
