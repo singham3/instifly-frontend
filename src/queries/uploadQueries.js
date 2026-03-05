@@ -1,4 +1,3 @@
-import { useMutation } from "@tanstack/react-query";
 import {
   initiateUpload,
   completeUpload,
@@ -6,47 +5,39 @@ import {
 import { uploadFileMultipart, getFileHash } from "../utils/uploadMultipart";
 import { addToQueue } from "../utils/uploadQueue";
 
-export function useMultipartUpload() {
-  return useMutation({
-    mutationFn: async ({ file, uploadId, isResume, key }) => {
-      return new Promise((resolve, reject) => {
+export async function uploadFile({ file, uploadId, isResume, key }) {
+  const fileHash = await getFileHash(file);
 
-        addToQueue(async () => {
-          try {
-            const fileHash = await getFileHash(file);
+  let finalUploadId = uploadId;
+  let finalKey = key;
 
-            let finalUploadId = uploadId;
-            let finalKey = key;
+  if (!isResume) {
+    const res = await initiateUpload({
+      file_name: file.name,
+      content_type: file.type,
+      file_size: file.size,
+      file_hash: fileHash,
+    });
 
-            if (!isResume) {
-              const res = await initiateUpload({
-                file_name: file.name,
-                content_type: file.type,
-                file_size: file.size,
-                file_hash: fileHash,
-              });
+    finalUploadId = res.upload_id;
+    finalKey = res.key;
+  }
 
-              finalUploadId = res.upload_id;
-              finalKey = res.key;
-            }
+  return new Promise((resolve, reject) => {
+    addToQueue(async () => {
+      try {
+        const parts = await uploadFileMultipart(file, finalUploadId, finalKey);
 
-            const parts = await uploadFileMultipart(file, finalUploadId, finalKey);
-
-            const res = await completeUpload({
-              key: finalKey,
-              upload_id: finalUploadId,
-              parts,
-            });
-
-            resolve(res.file_url);
-
-          } catch (err) {
-            reject(err);
-          }
+        const res = await completeUpload({
+          key: finalKey,
+          upload_id: finalUploadId,
+          parts,
         });
 
-      });
-    }
-
+        resolve(res.file_url);
+      } catch (err) {
+        reject(err);
+      }
+    });
   });
 }
