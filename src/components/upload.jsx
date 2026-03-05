@@ -1,5 +1,5 @@
 import { uploadFile } from "../queries/uploadQueries";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import {
   getUploadState,
 } from "../utils/uploadStorage";
@@ -12,31 +12,9 @@ export default function Upload() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
-  const fetchUploads = useCallback(async () => {
-    try {
-      const data = await listUploads(currentPage);
-      setCompletedFiles(data.results);
-      setTotalPages(Math.ceil(data.count / 10));
-    } catch (err) {
-      console.error('Failed to fetch uploads:', err);
-    }
-  }, [currentPage]);
-
-  const handleDelete = useCallback(async (id) => {
-    if (!confirm('Delete this file?')) return;
-    try {
-      await deleteUpload(id);
-      fetchUploads();
-    } catch (err) {
-      console.error('Delete failed:', err);
-    }
-  }, [fetchUploads]);
-
   useEffect(() => {
     fetchUploads();
-  }, [currentPage, fetchUploads]);
 
-  useEffect(() => {
     // 🔥 listen for live progress updates
     const handler = (e) => {
       const { fileName, uploadedCount, totalParts } = e.detail;
@@ -76,6 +54,30 @@ export default function Upload() {
       window.removeEventListener("upload-cancelled-all", cancelAllHandler);
     };
   }, []);
+
+  const fetchUploads = async () => {
+    try {
+      const data = await listUploads(currentPage);
+      setCompletedFiles(data.results);
+      setTotalPages(Math.ceil(data.count / 10));
+    } catch (err) {
+      console.error('Failed to fetch uploads:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchUploads();
+  }, [currentPage]);
+
+  const handleDelete = async (id) => {
+    if (!confirm('Delete this file?')) return;
+    try {
+      await deleteUpload(id);
+      fetchUploads();
+    } catch (err) {
+      console.error('Delete failed:', err);
+    }
+  };
 
   // 📁 File selection
   const handleFileChange = (e) => {
