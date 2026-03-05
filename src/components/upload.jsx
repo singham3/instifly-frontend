@@ -1,5 +1,5 @@
 import { uploadFile } from "../queries/uploadQueries";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   getUploadState,
 } from "../utils/uploadStorage";
@@ -12,7 +12,7 @@ export default function Upload() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
-  const fetchUploads = async () => {
+  const fetchUploads = useCallback(async () => {
     try {
       const data = await listUploads(currentPage);
       setCompletedFiles(data.results);
@@ -20,9 +20,9 @@ export default function Upload() {
     } catch (err) {
       console.error('Failed to fetch uploads:', err);
     }
-  };
+  }, [currentPage]);
 
-  const handleDelete = async (id) => {
+  const handleDelete = useCallback(async (id) => {
     if (!confirm('Delete this file?')) return;
     try {
       await deleteUpload(id);
@@ -30,7 +30,7 @@ export default function Upload() {
     } catch (err) {
       console.error('Delete failed:', err);
     }
-  };
+  }, [fetchUploads]);
 
   useEffect(() => {
     fetchUploads();
