@@ -12,10 +12,23 @@ export default function Upload() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
+  // fetch data effect
   useEffect(() => {
+    const fetchUploads = async () => {
+      try {
+        const data = await listUploads(currentPage);
+        setCompletedFiles(data.results);
+        setTotalPages(Math.ceil(data.count / 10));
+      } catch (err) {
+        console.error("Failed to fetch uploads:", err);
+      }
+    };
     fetchUploads();
+  }, [currentPage]);
 
-    // 🔥 listen for live progress updates
+  // upload progress listeners
+  useEffect(() => {
+
     const handler = (e) => {
       const { fileName, uploadedCount, totalParts } = e.detail;
 
@@ -53,27 +66,16 @@ export default function Upload() {
       window.removeEventListener("upload-progress", handler);
       window.removeEventListener("upload-cancelled-all", cancelAllHandler);
     };
-  }, [fetchUploads]);
 
-  const fetchUploads = async () => {
-    try {
-      const data = await listUploads(currentPage);
-      setCompletedFiles(data.results);
-      setTotalPages(Math.ceil(data.count / 10));
-    } catch (err) {
-      console.error('Failed to fetch uploads:', err);
-    }
-  };
-
-  useEffect(() => {
-    fetchUploads();
-  }, [currentPage]);
+  }, []);
 
   const handleDelete = async (id) => {
     if (!confirm('Delete this file?')) return;
     try {
       await deleteUpload(id);
-      fetchUploads();
+      const data = await listUploads(currentPage);
+      setCompletedFiles(data.results);
+      setTotalPages(Math.ceil(data.count / 10));
     } catch (err) {
       console.error('Delete failed:', err);
     }
