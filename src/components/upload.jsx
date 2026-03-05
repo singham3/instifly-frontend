@@ -1,14 +1,12 @@
 import { uploadFile } from "../queries/uploadQueries";
 import { useEffect, useState } from "react";
 import {
-  getAllUploads,
   getUploadState,
 } from "../utils/uploadStorage";
 import { cancelUpload } from "../utils/uploadMultipart";
 import { listUploads, deleteUpload } from "../services/uploadService";
 
 export default function Upload() {
-  const [files, setFiles] = useState([]);
   const [uploads, setUploads] = useState([]);
   const [completedFiles, setCompletedFiles] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -46,7 +44,6 @@ export default function Upload() {
 
     const cancelAllHandler = () => {
       setUploads([]);
-      setFiles([]);
     };
 
     window.addEventListener("upload-progress", handler);
@@ -86,8 +83,6 @@ export default function Upload() {
   const handleFileChange = (e) => {
     const selectedFiles = Array.from(e.target.files);
     if (selectedFiles.length === 0) return;
-
-    setFiles(prev => [...prev, ...selectedFiles]);
     
     // Immediately add to uploads UI
     selectedFiles.forEach(file => {
