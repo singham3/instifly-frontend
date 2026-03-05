@@ -53,7 +53,7 @@ export default function Upload() {
       window.removeEventListener("upload-progress", handler);
       window.removeEventListener("upload-cancelled-all", cancelAllHandler);
     };
-  }, []);
+  }, [fetchUploads]);
 
   const fetchUploads = async () => {
     try {
